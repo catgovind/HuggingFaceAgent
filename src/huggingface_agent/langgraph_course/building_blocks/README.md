@@ -6,7 +6,9 @@ LangGraph's core building blocks: **State** (a `TypedDict`), **Nodes** (plain fu
 
 ## Files
 
-- **`party_graph.py`** — `PartyPlanningGraph`, plus the module-level `PartyState`, node functions, and routing function the class assembles.
+- **`party_graph.py`** — two classes:
+  - **`MoodGraph`** — the course page's own example, as-is: `node_1`/`node_2`/`node_3`, `decide_mood`, wrapped in a class. Running it reproduces the page's own stated example output (`"Hi, this is Lance. I am sad!"`).
+  - **`PartyPlanningGraph`** — the same pattern adapted to this project's theme: `pick_theme`/`plan_formal`/`plan_casual`, `decide_formality`.
 
 ## Run it
 
@@ -36,12 +38,13 @@ flowchart TD
 
 ## What we verified hands-on
 
-Ran `PartyPlanningGraph` twice in a row — the conditional edge genuinely branched differently each time:
+- **`MoodGraph`**: `RESULT: Hi, this is Lance. I am sad!` — matches the course page's own stated example output exactly.
+- **`PartyPlanningGraph`**, run twice in a row — the conditional edge genuinely branched differently each time:
 ```
 run 1: ---pick_theme---  ---plan_casual---  -> "...Casual buffet planned."
 run 2: ---pick_theme---  ---plan_formal---  -> "...Formal 3-course dinner planned."
 ```
-Confirms `decide_formality`'s random routing is real, not just structurally present but unused.
+Confirms the conditional-edge random routing is real, not just structurally present but unused.
 
 ## Visualization — opt-in, not automatic
 

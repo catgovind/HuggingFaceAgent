@@ -1,5 +1,9 @@
 """Building blocks of LangGraph: State, Nodes, Edges, StateGraph.
 
+Two examples: MoodGraph is the course page's own example as-is (node_1/
+node_2/node_3, decide_mood), wrapped in a class; PartyPlanningGraph is the
+same pattern adapted to this project's party-planning theme.
+
 https://huggingface.co/learn/agents-course/en/unit2/langgraph/building_blocks
 """
 
@@ -8,6 +12,62 @@ from typing import Literal
 
 from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
+
+
+class MoodState(TypedDict):
+    """The course page's own example state, exactly as written -- one
+    string field, graph_state."""
+
+    graph_state: str
+
+
+def node_1(state: MoodState) -> dict:
+    print("---Node 1---")
+    return {"graph_state": state["graph_state"] + " I am"}
+
+
+def node_2(state: MoodState) -> dict:
+    print("---Node 2---")
+    return {"graph_state": state["graph_state"] + " happy!"}
+
+
+def node_3(state: MoodState) -> dict:
+    print("---Node 3---")
+    return {"graph_state": state["graph_state"] + " sad!"}
+
+
+def decide_mood(state: MoodState) -> Literal["node_2", "node_3"]:
+    """A random 50/50 split for demonstration -- in practice, inspect state."""
+    if random.random() < 0.5:
+        return "node_2"
+    return "node_3"
+
+
+class MoodGraph:
+    """The course page's own example, wrapped in a class for consistency
+    with this project's other examples. __init__ builds and compiles the
+    graph exactly as the page shows it (add_node x3, add_edge(START,
+    "node_1"), add_conditional_edges("node_1", decide_mood), add_edge to
+    END from both branches); run() is the page's graph.invoke(...) call.
+    """
+
+    def __init__(self) -> None:
+        builder = StateGraph(MoodState)
+
+        builder.add_node("node_1", node_1)
+        builder.add_node("node_2", node_2)
+        builder.add_node("node_3", node_3)
+
+        builder.add_edge(START, "node_1")
+        builder.add_conditional_edges("node_1", decide_mood)
+        builder.add_edge("node_2", END)
+        builder.add_edge("node_3", END)
+
+        self.graph = builder.compile()
+
+    def run(self, initial_state: str = "Hi, this is Lance.") -> str:
+        result = self.graph.invoke({"graph_state": initial_state})
+        return result["graph_state"]
 
 
 class PartyState(TypedDict):
@@ -77,6 +137,11 @@ class PartyPlanningGraph:
 
 
 if __name__ == "__main__":
+    print("=== MoodGraph (course page's own example) ===")
+    mood = MoodGraph()
+    print("RESULT:", mood.run())
+
+    print("\n=== PartyPlanningGraph (adapted) ===")
     planner = PartyPlanningGraph()
     print("FINAL PLAN:", planner.run("Alfred's notes:"))
 
