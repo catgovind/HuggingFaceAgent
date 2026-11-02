@@ -1,5 +1,9 @@
 outputs/
 chroma_db/
+# pyvis writes these static asset files to the cwd as a side effect of
+# llama_index.utils.workflow.draw_all_possible_flows()
+/lib/
+/party_workflow.html
 .env
 .env.*
 !.env.example
