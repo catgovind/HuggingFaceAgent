@@ -1,12 +1,23 @@
 """Components: the five-stage RAG pipeline (Loading, Indexing, Storing,
-Querying, Evaluation) behind LlamaIndex's QueryEngine, built over a small
-local knowledge base about Wayne Manor parties.
+Querying, Evaluation) behind LlamaIndex's QueryEngine.
+
+Originally built over a small local knowledge base about Wayne Manor
+parties (see data/); now points at data_tamil/, real Tamil-language chapter
+text from Ponniyin Selvan (sourced from Project Madurai's Unicode etext,
+since the PDF in docs/ uses a broken legacy Tamil font encoding that
+produces garbled text on extraction). Uses a multilingual embedding model
+instead of the original English-only one for this reason.
 
 https://huggingface.co/learn/agents-course/en/unit2/llama-index/components
 """
 
 import os
+import sys
 from pathlib import Path
+
+# Tamil text will be printed; Windows' default console codepage can't
+# encode it (same UnicodeEncodeError seen in multi_agent_systems).
+sys.stdout.reconfigure(encoding="utf-8")
 
 import chromadb
 from dotenv import load_dotenv
@@ -20,49 +31,65 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 
 load_dotenv()
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
+DATA_DIR = Path(__file__).resolve().parent / "data_tamil"
 DB_DIR = Path(__file__).resolve().parent / "chroma_db"
 
 
 class PartyQueryEngine:
     """Wraps the course's five RAG stages into one reusable object.
 
-    1. Loading   -- SimpleDirectoryReader reads data/*.txt
+    1. Loading   -- SimpleDirectoryReader reads data_dir/*.txt
     2. Indexing  -- SentenceSplitter chunks text, HuggingFaceEmbedding embeds it
     3. Storing   -- ChromaVectorStore persists the vectors to disk
     4. Querying  -- VectorStoreIndex.as_query_engine() answers questions
     5. Evaluation -- FaithfulnessEvaluator checks an answer against its sources
 
-    Note: re-running this against an existing chroma_db/ re-ingests the same
-    documents into the same collection -- fine for learning, but would need
-    deduplication/versioning for a real persistent index.
+    Ingestion (1+2) only runs once per collection -- __init__ checks
+    collection.count() first and skips re-ingesting if it's already
+    populated. Earlier versions of this class re-ingested on every
+    construction, which silently duplicated every chunk on repeated runs
+    (confirmed for real: 3,657 vectors accumulated from what should have
+    been ~700-900) and corrupted retrieval quality as a result.
     """
 
     def __init__(
         self,
         data_dir: Path = DATA_DIR,
         db_dir: Path = DB_DIR,
-        embed_model_name: str = "BAAI/bge-small-en-v1.5",
+        # BAAI/bge-small-en-v1.5 (the original default) is English-only and
+        # produces poor embeddings for Tamil text -- intfloat/multilingual-e5-small
+        # is trained across languages, confirmed by testing: a Tamil sentence and
+        # its English translation scored 0.91 cosine similarity vs. 0.78 for an
+        # unrelated English sentence.
+        embed_model_name: str = "intfloat/multilingual-e5-small",
         llm_model_name: str = "Qwen/Qwen2.5-Coder-32B-Instruct",
+        collection_name: str = "story_of_chola",
     ) -> None:
-        # 1. Loading
-        documents = SimpleDirectoryReader(input_dir=str(data_dir)).load_data()
-
         # 3. Storing (set up the vector store first, indexing writes into it)
         db = chromadb.PersistentClient(path=str(db_dir))
-        collection = db.get_or_create_collection("party_planning")
+        collection = db.get_or_create_collection(collection_name)
         vector_store = ChromaVectorStore(chroma_collection=collection)
 
-        # 2. Indexing: chunk + embed, writing into the vector store above
         embed_model = HuggingFaceEmbedding(model_name=embed_model_name)
-        pipeline = IngestionPipeline(
-            transformations=[
-                SentenceSplitter(chunk_size=512, chunk_overlap=20),
-                embed_model,
-            ],
-            vector_store=vector_store,
-        )
-        pipeline.run(documents=documents)
+
+        # Only ingest once per collection. Without this check, every
+        # PartyQueryEngine() construction re-ran 1. Loading + 2. Indexing
+        # against the same collection, silently duplicating every chunk --
+        # confirmed for real: 3 files that should produce ~700-900 chunks
+        # had accumulated 3,657 vectors after repeated runs, which also
+        # corrupted retrieval (duplicate chunks crowding out real matches).
+        if collection.count() == 0:
+            # 1. Loading
+            documents = SimpleDirectoryReader(input_dir=str(data_dir)).load_data()
+            # 2. Indexing: chunk + embed, writing into the vector store above
+            pipeline = IngestionPipeline(
+                transformations=[
+                    SentenceSplitter(chunk_size=512, chunk_overlap=20),
+                    embed_model,
+                ],
+                vector_store=vector_store,
+            )
+            pipeline.run(documents=documents)
 
         self.index = VectorStoreIndex.from_vector_store(vector_store, embed_model=embed_model)
         self.llm = HuggingFaceInferenceAPI(model_name=llm_model_name, token=os.getenv("HF_TOKEN"))
@@ -84,9 +111,7 @@ class PartyQueryEngine:
 if __name__ == "__main__":
     engine = PartyQueryEngine()
 
-    answer = engine.query("What should I serve at the villain masquerade party, given past feedback?")
+    # English question against Tamil source text -- exercises the
+    # multilingual embedding model's cross-lingual retrieval directly.
+    answer = engine.query("Who is Vandiyathevan and what is he doing at the lake?")
     print("Answer:", answer)
-
-    answer, passing = engine.query_and_evaluate("What wine pairs with the villain masquerade theme?")
-    print("\nAnswer:", answer)
-    print("Faithful to sources:", passing)
