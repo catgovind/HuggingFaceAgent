@@ -33,6 +33,17 @@ from huggingface_agent.llamaindex_course.tools.party_tools import (
 # (plain llm.achat()) instead, which has no such issue.
 DEFAULT_MODEL_ID = "Qwen/Qwen2.5-Coder-32B-Instruct"
 
+# A second real bug, confirmed by streaming raw AgentOutput events: with
+# HuggingFaceInferenceAPI's default num_output=256, a verbose answer (e.g. a
+# full multi-section menu) gets cut off mid-generation before the model ever
+# reaches the "Answer:" marker ReActOutputParser requires to end the loop.
+# The model then retries, produces the same (still-truncated) response again,
+# and repeats until WorkflowRuntimeError: "Max iterations ... reached!" --
+# confirmed reproducible, not random: it failed at the identical point on
+# three separate runs before this fix. Raising num_output gives the model
+# room to actually finish, marker included.
+DEFAULT_NUM_OUTPUT = 1024
+
 
 class BasicPartyAgent:
     """1. A basic tool-using agent -- one ReActAgent with one FunctionTool.
@@ -42,7 +53,7 @@ class BasicPartyAgent:
     """
 
     def __init__(self, model_id: str = DEFAULT_MODEL_ID) -> None:
-        self.llm = HuggingFaceInferenceAPI(model_name=model_id)
+        self.llm = HuggingFaceInferenceAPI(model_name=model_id, num_output=DEFAULT_NUM_OUTPUT)
         menu_agent = ReActAgent(
             name="menu_planner",
             description="Suggests a party menu for a given occasion.",
@@ -64,7 +75,7 @@ class NovelRAGAgent:
     """3. RAG agent -- wraps the real PartyQueryEngine (components/) as a tool."""
 
     def __init__(self, model_id: str = DEFAULT_MODEL_ID) -> None:
-        self.llm = HuggingFaceInferenceAPI(model_name=model_id)
+        self.llm = HuggingFaceInferenceAPI(model_name=model_id, num_output=DEFAULT_NUM_OUTPUT)
         novel_agent = ReActAgent(
             name="novel_lookup",
             description="Answers questions about the Ponniyin Selvan novel text.",
@@ -89,7 +100,7 @@ class MultiAgentPartyPlanner:
     """
 
     def __init__(self, model_id: str = DEFAULT_MODEL_ID) -> None:
-        self.llm = HuggingFaceInferenceAPI(model_name=model_id)
+        self.llm = HuggingFaceInferenceAPI(model_name=model_id, num_output=DEFAULT_NUM_OUTPUT)
 
         menu_agent = ReActAgent(
             name="menu_planner",
