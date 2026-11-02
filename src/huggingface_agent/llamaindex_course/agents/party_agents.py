@@ -14,7 +14,6 @@ import sys
 sys.stdout.reconfigure(encoding="utf-8")
 
 from llama_index.core.agent.workflow import AgentWorkflow, ReActAgent
-from llama_index.core.tools import FunctionTool
 from llama_index.core.workflow import Context
 from llama_index.llms.huggingface_api import HuggingFaceInferenceAPI
 
@@ -35,34 +34,52 @@ from huggingface_agent.llamaindex_course.tools.party_tools import (
 DEFAULT_MODEL_ID = "Qwen/Qwen2.5-Coder-32B-Instruct"
 
 
-def build_basic_agent() -> AgentWorkflow:
-    """1. A basic tool-using agent -- one ReActAgent with one FunctionTool."""
-    llm = HuggingFaceInferenceAPI(model_name=DEFAULT_MODEL_ID)
-    menu_agent = ReActAgent(
-        name="menu_planner",
-        description="Suggests a party menu for a given occasion.",
-        tools=[build_menu_function_tool()],
-        llm=llm,
-        streaming=False,
-    )
-    return AgentWorkflow(agents=[menu_agent], root_agent="menu_planner")
+class BasicPartyAgent:
+    """1. A basic tool-using agent -- one ReActAgent with one FunctionTool.
+
+    Also demonstrates 2. state/memory: new_context() returns a Context that
+    ties multiple run() calls into one remembered conversation.
+    """
+
+    def __init__(self, model_id: str = DEFAULT_MODEL_ID) -> None:
+        self.llm = HuggingFaceInferenceAPI(model_name=model_id)
+        menu_agent = ReActAgent(
+            name="menu_planner",
+            description="Suggests a party menu for a given occasion.",
+            tools=[build_menu_function_tool()],
+            llm=self.llm,
+            streaming=False,
+        )
+        self.workflow = AgentWorkflow(agents=[menu_agent], root_agent="menu_planner")
+
+    def new_context(self) -> Context:
+        """A fresh Context -- pass the same one to run() across calls to remember state."""
+        return Context(self.workflow)
+
+    async def run(self, message: str, ctx: Context | None = None) -> str:
+        return str(await self.workflow.run(message, ctx=ctx))
 
 
-def build_rag_agent() -> AgentWorkflow:
+class NovelRAGAgent:
     """3. RAG agent -- wraps the real PartyQueryEngine (components/) as a tool."""
-    llm = HuggingFaceInferenceAPI(model_name=DEFAULT_MODEL_ID)
-    novel_agent = ReActAgent(
-        name="novel_lookup",
-        description="Answers questions about the Ponniyin Selvan novel text.",
-        system_prompt="Use your tool to answer questions about the Ponniyin Selvan novel.",
-        tools=[build_novel_query_engine_tool()],
-        llm=llm,
-        streaming=False,
-    )
-    return AgentWorkflow(agents=[novel_agent], root_agent="novel_lookup")
+
+    def __init__(self, model_id: str = DEFAULT_MODEL_ID) -> None:
+        self.llm = HuggingFaceInferenceAPI(model_name=model_id)
+        novel_agent = ReActAgent(
+            name="novel_lookup",
+            description="Answers questions about the Ponniyin Selvan novel text.",
+            system_prompt="Use your tool to answer questions about the Ponniyin Selvan novel.",
+            tools=[build_novel_query_engine_tool()],
+            llm=self.llm,
+            streaming=False,
+        )
+        self.workflow = AgentWorkflow(agents=[novel_agent], root_agent="novel_lookup")
+
+    async def run(self, message: str) -> str:
+        return str(await self.workflow.run(message))
 
 
-def build_multi_agent_system() -> AgentWorkflow:
+class MultiAgentPartyPlanner:
     """4. Multi-agent system -- two specialized agents, one root, with handoff.
 
     menu_planner handles party-menu questions directly; novel_lookup handles
@@ -70,58 +87,57 @@ def build_multi_agent_system() -> AgentWorkflow:
     can_handoff_to lets either one route to the other instead of trying (and
     failing) to answer outside its specialty.
     """
-    llm = HuggingFaceInferenceAPI(model_name=DEFAULT_MODEL_ID)
 
-    menu_agent = ReActAgent(
-        name="menu_planner",
-        description="Suggests a party menu for a given occasion (casual, formal, superhero).",
-        system_prompt=(
-            "You suggest party menus using your tool. For anything about the "
-            "Ponniyin Selvan novel, hand off to novel_lookup."
-        ),
-        tools=[build_menu_function_tool()],
-        llm=llm,
-        streaming=False,
-        can_handoff_to=["novel_lookup"],
-    )
-    novel_agent = ReActAgent(
-        name="novel_lookup",
-        description="Answers questions about the Ponniyin Selvan novel text.",
-        system_prompt=(
-            "You answer questions about the Ponniyin Selvan novel using your tool. "
-            "For anything about party menus, hand off to menu_planner."
-        ),
-        tools=[build_novel_query_engine_tool()],
-        llm=llm,
-        streaming=False,
-        can_handoff_to=["menu_planner"],
-    )
-    return AgentWorkflow(agents=[menu_agent, novel_agent], root_agent="menu_planner")
+    def __init__(self, model_id: str = DEFAULT_MODEL_ID) -> None:
+        self.llm = HuggingFaceInferenceAPI(model_name=model_id)
 
+        menu_agent = ReActAgent(
+            name="menu_planner",
+            description="Suggests a party menu for a given occasion (casual, formal, superhero).",
+            system_prompt=(
+                "You suggest party menus using your tool. For anything about the "
+                "Ponniyin Selvan novel, hand off to novel_lookup."
+            ),
+            tools=[build_menu_function_tool()],
+            llm=self.llm,
+            streaming=False,
+            can_handoff_to=["novel_lookup"],
+        )
+        novel_agent = ReActAgent(
+            name="novel_lookup",
+            description="Answers questions about the Ponniyin Selvan novel text.",
+            system_prompt=(
+                "You answer questions about the Ponniyin Selvan novel using your tool. "
+                "For anything about party menus, hand off to menu_planner."
+            ),
+            tools=[build_novel_query_engine_tool()],
+            llm=self.llm,
+            streaming=False,
+            can_handoff_to=["menu_planner"],
+        )
+        self.workflow = AgentWorkflow(agents=[menu_agent, novel_agent], root_agent="menu_planner")
 
-async def demo_memory(agent: AgentWorkflow) -> None:
-    """2. State/memory -- a Context ties multiple .run() calls into one conversation."""
-    ctx = Context(agent)
-    r1 = await agent.run("My favorite party occasion is superhero-themed.", ctx=ctx)
-    print("Turn 1:", r1)
-    r2 = await agent.run("Suggest a menu for my favorite occasion.", ctx=ctx)
-    print("Turn 2:", r2)
+    async def run(self, message: str) -> str:
+        return str(await self.workflow.run(message))
 
 
 async def main() -> None:
     print("=== 1. Basic agent ===")
-    basic_agent = build_basic_agent()
+    basic_agent = BasicPartyAgent()
     print(await basic_agent.run("Suggest a menu for a casual party."))
 
     print("\n=== 2. Memory via Context ===")
-    await demo_memory(build_basic_agent())
+    memory_agent = BasicPartyAgent()
+    ctx = memory_agent.new_context()
+    print("Turn 1:", await memory_agent.run("My favorite party occasion is superhero-themed.", ctx=ctx))
+    print("Turn 2:", await memory_agent.run("Suggest a menu for my favorite occasion.", ctx=ctx))
 
     print("\n=== 3. RAG agent ===")
-    rag_agent = build_rag_agent()
+    rag_agent = NovelRAGAgent()
     print(await rag_agent.run("Who is Vandiyathevan?"))
 
     print("\n=== 4. Multi-agent system ===")
-    multi_agent = build_multi_agent_system()
+    multi_agent = MultiAgentPartyPlanner()
     print("Menu question:", await multi_agent.run("Suggest a formal party menu."))
     print("Novel question:", await multi_agent.run("Who is Kundavai?"))
 

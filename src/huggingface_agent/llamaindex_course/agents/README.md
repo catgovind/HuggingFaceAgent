@@ -6,7 +6,7 @@ LlamaIndex's `AgentWorkflow`: basic tool-using agents, stateful conversation via
 
 ## Files
 
-- **`party_agents.py`** — `build_basic_agent()`, `demo_memory()`, `build_rag_agent()`, `build_multi_agent_system()`. The RAG and multi-agent examples reuse the real tools from `tools/party_tools.py` rather than rebuilding anything.
+- **`party_agents.py`** — `BasicPartyAgent` (also covers memory via `new_context()`), `NovelRAGAgent`, `MultiAgentPartyPlanner`. The RAG and multi-agent classes reuse the real tools from `tools/party_tools.py` rather than rebuilding anything.
 
 ## Run it
 
@@ -35,7 +35,7 @@ Each agent only needs tools for its own specialty; `can_handoff_to` lets it rout
 
 ## A real, non-deterministic limitation (not fixed, documented)
 
-During testing, one run of `demo_memory()`'s first turn (a plain statement, not a question) hit `WorkflowRuntimeError: Max iterations of 20 reached!` — the model failed to produce output `ReActOutputParser` could parse, enough times to exhaust the retry budget. Re-running the *exact same code* immediately after succeeded normally. This is inherent LLM non-determinism in producing strict ReAct-format output (`Qwen2.5-Coder-32B-Instruct` is a coding model, not fine-tuned specifically for agentic ReAct formatting) — not something a code fix resolves. Worth knowing if you see this error: it's usually transient, not a sign something is broken.
+During testing, one run of the memory demo's first turn (a plain statement, not a question) hit `WorkflowRuntimeError: Max iterations of 20 reached!` — the model failed to produce output `ReActOutputParser` could parse, enough times to exhaust the retry budget. Re-running the *exact same code* immediately after succeeded normally. This is inherent LLM non-determinism in producing strict ReAct-format output (`Qwen2.5-Coder-32B-Instruct` is a coding model, not fine-tuned specifically for agentic ReAct formatting) — not something a code fix resolves. Worth knowing if you see this error: it's usually transient, not a sign something is broken.
 
 ## What we verified hands-on
 
