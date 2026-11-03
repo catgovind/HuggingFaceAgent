@@ -35,6 +35,10 @@ flowchart TD
 
 Also: the course's code notifies "Mr. Hugg" despite the surrounding text describing "Mr. Wayne." This version uses **Mr. Wayne** throughout — also the canonically correct name for Alfred's employer, matching the Wayne Manor theme already used across this project.
 
+## A real bug, found and fixed: `provider="featherless-ai"`
+
+Initially worked, then later failed with `BadRequestError: ... 'Qwen/Qwen2.5-Coder-32B-Instruct' is not supported by any provider you have enabled` — reproduced consistently, not a one-off. Same root cause as the vision-model issue in `smolagents_course/vision_and_browser_agents/`: `model_info(..., expand="inferenceProviderMapping")` confirmed the model's *only* live provider right now is `featherless-ai`, which isn't enabled by default on this account. `HuggingFaceEndpoint`'s provider auto-resolution doesn't fall back to it on its own. Fixed by passing `provider="featherless-ai"` explicitly in `_build_llm`. Worth knowing: a model that was working can stop working later if its set of live providers changes — check `model_info` rather than assuming the model itself is broken.
+
 ## What we verified hands-on
 
 Ran both branches for real:

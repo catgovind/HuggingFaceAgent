@@ -44,7 +44,19 @@ class EmailState(TypedDict):
 
 
 def _build_llm(model_id: str) -> ChatHuggingFace:
-    endpoint = HuggingFaceEndpoint(repo_id=model_id, huggingfacehub_api_token=os.getenv("HF_TOKEN"), temperature=0.01)
+    # HuggingFaceEndpoint's provider auto-resolution doesn't find this model
+    # unless the provider is named explicitly -- confirmed via model_info():
+    # Qwen2.5-Coder-32B-Instruct's only live inferenceProviderMapping right
+    # now is 'featherless-ai', which isn't enabled by default on this
+    # account (same root cause hit earlier with a vision model). Without
+    # this, the call fails with "not supported by any provider you have
+    # enabled" even though the model is genuinely live somewhere.
+    endpoint = HuggingFaceEndpoint(
+        repo_id=model_id,
+        provider="featherless-ai",
+        huggingfacehub_api_token=os.getenv("HF_TOKEN"),
+        temperature=0.01,
+    )
     return ChatHuggingFace(llm=endpoint)
 
 
