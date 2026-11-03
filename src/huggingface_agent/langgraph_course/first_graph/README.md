@@ -7,11 +7,17 @@ Course page: https://huggingface.co/learn/agents-course/en/unit2/langgraph/first
 ## Files
 
 - **`mail_sorting_graph.py`** — `MailSortingGraph`, `EmailState`.
+- **`eval_spam_classification.py`** — runs 8 labeled emails (4 spam, 4 legitimate) through the real compiled graph and checks `is_spam` against the expected label, instead of trusting one example of each.
 
 ## Run it
 
 ```
 python -m huggingface_agent.langgraph_course.first_graph.mail_sorting_graph
+```
+
+Run the eval:
+```
+python -m huggingface_agent.langgraph_course.first_graph.eval_spam_classification
 ```
 
 ## The graph
@@ -51,3 +57,9 @@ Ran both branches for real:
 - **Spam email** (`"YOU HAVE WON $5,000,000!!!"`) → classified as spam with a sensible reason (*"Unsolicited lottery win notification requiring personal financial information"*), correctly short-circuited straight to `handle_spam` — `draft_response` and `notify_mr_wayne` never ran for it.
 
 Both runs' JSON classification parsed cleanly on the first attempt — the safe-fallback path (`is_spam: False` on parse failure) exists for robustness but wasn't needed in these runs.
+
+## Eval: spam classification on 8 labeled emails
+
+`eval_spam_classification.py` goes beyond the two hand-picked examples above — 4 spam cases (lottery scam, phishing, inheritance scam, fake pharmacy) and 4 legitimate ones (business inquiry, thank-you note, complaint, meeting request), each run through the real compiled graph via `MailSortingGraph.run()`, so routing is exercised too, not just the raw classification call.
+
+**Result: 8/8 correct (100%)**, confirmed by an actual run, not assumed. Legitimate cases were also correctly sub-categorized (`thank_you`, `complaint`, `request`) along the way, even though the eval only scores the binary `is_spam` label.
