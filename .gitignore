@@ -4,6 +4,9 @@ chroma_db/
 # llama_index.utils.workflow.draw_all_possible_flows()
 /lib/
 /party_workflow.html
+# written to the cwd by generate_training_note_image() when run from the
+# project root
+/training_note.png
 .env
 .env.*
 !.env.example
