@@ -37,6 +37,17 @@ class AlfredGalaAgent:
         # inferenceProviderMapping, its only live provider is
         # featherless-ai, which isn't enabled by default on this account.
         self.model = InferenceClientModel(model_id=model_id, provider="featherless-ai")
+        # Real bug found via eval_alfred.py: the course's own
+        # planning_interval=3 made a simple "tell me about our guest Marie
+        # Curie" spiral into 12+ steps of open-ended web research about the
+        # *historical* Marie Curie (Nobel prizes, WWI work, ...) instead of
+        # one guest_info_retriever call -- 176K+ input tokens before being
+        # killed, and even capped at max_steps=10 it still skipped the local
+        # tool entirely (no email in the answer). The plan-generation step
+        # doesn't respect `instructions` the way normal steps do. Removing
+        # planning_interval (not just adding instructions, and not just
+        # capping max_steps) was the actual fix -- confirmed: with it gone,
+        # the same question resolved correctly in 2 steps.
         self.agent = CodeAgent(
             # add_base_tools=True already provides web_search, visit_webpage,
             # and final_answer -- an explicit DuckDuckGoSearchTool() would
@@ -45,7 +56,15 @@ class AlfredGalaAgent:
             tools=[guest_tool, WeatherInfoTool(), HubStatsTool()],
             model=self.model,
             add_base_tools=True,
-            planning_interval=3,
+            max_steps=10,
+            instructions=(
+                "When asked about a gala guest, ALWAYS call guest_info_retriever "
+                "first, even if you already know facts about that person from "
+                "general knowledge -- our guest list is the source of truth for "
+                "their relation to the host and contact email, which general "
+                "knowledge cannot provide. Only use web_search for information "
+                "truly not covered by guest_info_retriever."
+            ),
         )
 
     def run(self, question: str, reset: bool = True) -> str:
