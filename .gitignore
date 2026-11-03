@@ -1,5 +1,7 @@
 outputs/
 chroma_db/
+# GAIA task attachments downloaded by DownloadTaskFileTool at runtime
+/src/huggingface_agent/unit4_final_benchmark/downloads/
 # pyvis writes these static asset files to the cwd as a side effect of
 # llama_index.utils.workflow.draw_all_possible_flows()
 /lib/
