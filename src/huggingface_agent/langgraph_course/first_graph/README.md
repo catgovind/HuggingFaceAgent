@@ -28,6 +28,10 @@ flowchart TD
     NW --> End
 ```
 
+![MailSortingGraph diagram](mail_sorting_graph.png)
+
+Rendered locally with matplotlib rather than LangGraph's own `draw_mermaid_png()` — that method sends the graph's structure to the public `mermaid.ink` API (same reason it's opt-in, not automatic, in `building_blocks/`).
+
 ## Two deliberate deviations from the course page
 
 1. **`ChatHuggingFace`/`HuggingFaceEndpoint` instead of `ChatOpenAI`** — no OpenAI key needed, consistent with every other framework example in this project (smolagents, LlamaIndex).
